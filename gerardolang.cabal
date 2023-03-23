@@ -12,14 +12,37 @@ build-type:         Simple
 extra-doc-files:    CHANGELOG.md
 -- extra-source-files:
 
-common warnings
-    ghc-options: -Wall
+common base
+    mixins:           base hiding (Prelude)
+                    , relude (Relude as Prelude)
+                    , relude
+    build-depends:    base ^>=4.17.0.0
+                    , relude ^>= 1.2.0.0
+    ghc-options:      -Wall -Werror
+    default-language: GHC2021
+    default-extensions: OverloadedStrings
 
-executable gerardolang
-    import:           warnings
+library
+    import:          base
+    build-depends:   megaparsec
+    hs-source-dirs:  lib
+    exposed-modules: Parser
+
+executable gl
+    import:           base
     main-is:          Main.hs
     -- other-modules:
     -- other-extensions:
-    build-depends:    base ^>=4.17.0.0
+    build-depends:    gerardolang
     hs-source-dirs:   app
-    default-language: GHC2021
+
+test-suite gl-test
+    import:             base
+    type:               exitcode-stdio-1.0
+    hs-source-dirs:     test
+    main-is:            Spec.hs
+    build-tool-depends: hspec-discover:hspec-discover == 2.*
+    other-modules:      ParserSpec
+    build-depends:      hspec == 2.*
+                      , hspec-megaparsec
+                      , gerardolang
