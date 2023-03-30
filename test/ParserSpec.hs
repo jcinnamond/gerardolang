@@ -12,6 +12,9 @@ spec = do
     it "parses a pipe" $
         parse "uuid |> strip" `shouldParse` Pipe (Call "uuid" []) (Call "strip" [])
 
+    it "parses a pipe and an argument" $
+        parse "uuid \"thing\" |> strip" `shouldParse` Pipe (Call "uuid" ["thing"]) (Call "strip" [])
+
     it "parses pipelines" $
-        parse "uuid |> strip |> lower"
+        parse "uuid |> strip \"-\" |> lower"
             `shouldParse` Pipe (Call "uuid" []) (Pipe (Call "strip" ["-"]) (Call "lower" []))
