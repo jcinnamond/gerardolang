@@ -18,3 +18,7 @@ spec = do
     it "parses pipelines" $
         parse "uuid |> strip \"-\" |> lower"
             `shouldParse` Pipe (Call "uuid" []) (Pipe (Call "strip" ["-"]) (Call "lower" []))
+
+    it "handles newlines" $
+        parse "uuid |> strip \"-\" \n"
+            `shouldParse` Pipe (Call "uuid" []) (Call "strip" ["-"])
