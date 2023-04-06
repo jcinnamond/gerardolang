@@ -20,11 +20,12 @@ common base
                     , relude ^>= 1.2.0.0
     ghc-options:      -Wall 
     default-language: GHC2021
-    default-extensions: OverloadedStrings
+    default-extensions: OverloadedStrings, DerivingStrategies
 
 library
     import:          base
     build-depends:   megaparsec
+                   , time
     hs-source-dirs:  lib
     exposed-modules: Parser
                    , Interpreter
@@ -46,4 +47,5 @@ test-suite gl-test
     other-modules:      ParserSpec
     build-depends:      hspec == 2.*
                       , hspec-megaparsec
+                      , time
                       , gerardolang
