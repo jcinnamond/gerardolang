@@ -18,7 +18,7 @@ common base
                     , relude
     build-depends:    base ^>=4.17.0.0
                     , relude ^>= 1.2.0.0
-    ghc-options:      -Wall -Werror
+    ghc-options:      -Wall 
     default-language: GHC2021
     default-extensions: OverloadedStrings
 
@@ -27,6 +27,7 @@ library
     build-depends:   megaparsec
     hs-source-dirs:  lib
     exposed-modules: Parser
+                   , Interpreter
 
 executable gl
     import:           base
