@@ -1,10 +1,41 @@
 module Interpreter (eval, run, Value (..)) where
 
-import Data.Text as T
+import Data.Map.Lazy qualified as M
+import Data.Text qualified as T
 import Data.Time (LocalTime, defaultTimeLocale)
 import Data.Time.Format (parseTimeM)
 import GHC.Show qualified (show)
 import Parser (Expr (..), parse)
+
+type FunctionSignature = [Text] -> Value -> EvalResult
+
+data Function = Function
+  { functionInputPyte :: Pyte
+  , functionResultPyte :: Pyte
+  , functionDefinition :: FunctionSignature
+  }
+
+functions :: Map Text Function
+functions =
+  M.fromList
+    [ ("uuid", Function VoidPyte TextPyte evalUUID)
+    , ("strip", Function TextPyte TextPyte evalStrip)
+    , ("parseTime", Function VoidPyte TimePyte evalParseTime)
+    ]
+
+evalUUID :: FunctionSignature
+evalUUID _ _ = pure $ TextValue "123-456"
+
+evalStrip :: FunctionSignature
+evalStrip [x] (TextValue v) = pure $ (TextValue . T.replace x "") v
+evalStrip args _ = Left $ ArgumentError "evalStrip" 1 (length args)
+
+evalParseTime :: FunctionSignature
+evalParseTime [x] _ = pure $
+  case parseTimeM True defaultTimeLocale "%Y-%m-%dT%H:%M:%s%Ez" (T.unpack x) of
+    Nothing -> error "parseTime error: bad time format"
+    Just t -> TimeValue t
+evalParseTime args _ = Left $ ArgumentError "parseTime" 1 (length args)
 
 data Pyte
   = TextPyte
@@ -31,6 +62,7 @@ type EvalResult = Either EvalError Value
 data EvalError
   = UnrecognisedCommand Text
   | IncorrectPyte Text Pyte Pyte
+  | ArgumentError Text Int Int
   deriving stock (Eq)
 
 instance Show EvalError where
@@ -38,6 +70,13 @@ instance Show EvalError where
   show (IncorrectPyte c VoidPyte _) = "function " <> quote c <> " does not take any arguments"
   show (IncorrectPyte c e a) =
     "unexpected argument type when calling "
+      <> quote c
+      <> ": expected "
+      <> show e
+      <> " but got "
+      <> show a
+  show (ArgumentError c e a) =
+    "wrong number of arguments when calling "
       <> quote c
       <> ": expected "
       <> show e
@@ -68,18 +107,12 @@ pyteCheck e = go e VoidPyte
     Right p' -> go exprs p'
 
 pyteCheckBuiltin :: Text -> Pyte -> PyteCheckResult
-pyteCheckBuiltin "uuid" p = expectVoid "uuid" p TextPyte
-pyteCheckBuiltin "strip" p = expectText "strip" p TextPyte
-pyteCheckBuiltin "parseTime" p = expectVoid "parseTime" p TimePyte
-pyteCheckBuiltin c _ = Left $ UnrecognisedCommand c
-
-expectVoid :: Text -> Pyte -> Pyte -> PyteCheckResult
-expectVoid _ VoidPyte p = pure p
-expectVoid c p _ = Left $ IncorrectPyte c VoidPyte p
-
-expectText :: Text -> Pyte -> Pyte -> PyteCheckResult
-expectText _ TextPyte p = pure p
-expectText c p _ = Left $ IncorrectPyte c TextPyte p
+pyteCheckBuiltin name p = case M.lookup name functions of
+  Just (Function{functionInputPyte, functionResultPyte}) ->
+    if functionInputPyte == p
+      then pure functionResultPyte
+      else Left $ IncorrectPyte name functionInputPyte p
+  Nothing -> Left $ UnrecognisedCommand name
 
 eval :: Expr -> EvalResult
 eval e = go e Void
@@ -91,10 +124,6 @@ eval e = go e Void
     Right v -> go exprs v
 
 callBuiltin :: Text -> [Text] -> Value -> EvalResult
-callBuiltin "uuid" [] _ = pure $ TextValue "123-456"
-callBuiltin "strip" [x] (TextValue v) = pure $ (TextValue . T.replace x "") v
-callBuiltin "parseTime" [x] _ = pure $
-  case parseTimeM True defaultTimeLocale "%Y-%m-%dT%H:%M:%s%Ez" (T.unpack x) of
-    Nothing -> error "parseTime error: bad time format"
-    Just t -> TimeValue t
-callBuiltin fn _ _ = Left $ UnrecognisedCommand fn
+callBuiltin name args v = case M.lookup name functions of
+  Just (Function{functionDefinition}) -> functionDefinition args v
+  Nothing -> Left $ UnrecognisedCommand name
