@@ -1,7 +1,7 @@
 module Parser (parse, Expr (..)) where
 
 import Data.Text qualified as T
-import Text.Megaparsec (MonadParsec (eof, try), ParseErrorBundle, Parsec, runParser, satisfy, sepBy)
+import Text.Megaparsec (MonadParsec (eof, try), Parsec, runParser, satisfy, sepBy)
 import Text.Megaparsec.Char (alphaNumChar, char, hspace, space, string)
 
 data Expr
@@ -11,8 +11,10 @@ data Expr
 
 type Parser = Parsec Void Text
 
-parse :: Text -> Either (ParseErrorBundle Text Void) Expr
-parse = runParser parseExpr ""
+parse :: Text -> Either Text Expr
+parse inp = case runParser parseExpr "" inp of
+    Left err -> Left $ show err
+    Right v -> pure v
 
 parseExpr :: Parser Expr
 parseExpr = (try parsePipe <|> parseCall) <* space <* eof
