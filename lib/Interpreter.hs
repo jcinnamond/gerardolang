@@ -1,8 +1,8 @@
-module Interpreter (eval, run, Value (..)) where
+module Interpreter (eval, run, Value (..), Result (..)) where
 
 import Data.Map.Lazy qualified as M
 import Data.Text qualified as T
-import Data.Time (LocalTime, defaultTimeLocale)
+import Data.Time (LocalTime, defaultTimeLocale, formatTime)
 import Data.Time.Format (parseTimeM)
 import GHC.Show qualified (show)
 import Parser (Expr (..), parse)
@@ -21,21 +21,26 @@ functions =
     [ ("uuid", Function VoidPyte TextPyte evalUUID)
     , ("strip", Function TextPyte TextPyte evalStrip)
     , ("parseTime", Function VoidPyte TimePyte evalParseTime)
+    , ("formatTime", Function TimePyte TextPyte evalFormatTime)
     ]
 
 evalUUID :: FunctionSignature
-evalUUID _ _ = pure $ TextValue "123-456"
+evalUUID _ _ = pure $ Ok $ TextValue "123-456"
 
 evalStrip :: FunctionSignature
-evalStrip [x] (TextValue v) = pure $ (TextValue . T.replace x "") v
+evalStrip [x] (TextValue v) = pure $ Ok $ (TextValue . T.replace x "") v
 evalStrip args _ = Left $ ArgumentError "evalStrip" 1 (length args)
 
 evalParseTime :: FunctionSignature
 evalParseTime [x] _ = pure $
   case parseTimeM True defaultTimeLocale "%Y-%m-%dT%H:%M:%s%Ez" (T.unpack x) of
-    Nothing -> error "parseTime error: bad time format"
-    Just t -> TimeValue t
+    Nothing -> Err "error when calling `parseTime`: invalid time format"
+    Just t -> Ok $ TimeValue t
 evalParseTime args _ = Left $ ArgumentError "parseTime" 1 (length args)
+
+evalFormatTime :: FunctionSignature
+evalFormatTime [x] (TimeValue v) = pure $ Ok $ TextValue $ T.pack $ formatTime defaultTimeLocale (T.unpack x) v
+evalFormatTime args _ = Left $ ArgumentError "formatTime" 1 (length args)
 
 data Pyte
   = TextPyte
@@ -57,7 +62,12 @@ data Value
 instance IsString Value where
   fromString = TextValue . T.pack
 
-type EvalResult = Either EvalError Value
+data Result
+  = Ok Value
+  | Err Text
+  deriving stock (Show, Eq)
+
+type EvalResult = Either EvalError Result
 
 data EvalError
   = UnrecognisedCommand Text
@@ -88,7 +98,7 @@ type PyteCheckResult = Either EvalError Pyte
 quote :: Text -> String
 quote x = "`" <> T.unpack x <> "`"
 
-run :: Text -> Either Text Value
+run :: Text -> Either Text Result
 run inp = do
   expr <- parse inp
   case pyteCheck expr of
@@ -115,10 +125,11 @@ pyteCheckBuiltin name p = case M.lookup name functions of
   Nothing -> Left $ UnrecognisedCommand name
 
 eval :: Expr -> EvalResult
-eval e = go e Void
+eval e = go e (Ok Void)
  where
-  go :: Expr -> Value -> EvalResult
-  go (Call fn args) x = callBuiltin fn args x
+  go :: Expr -> Result -> EvalResult
+  go (Call fn args) (Ok x) = callBuiltin fn args x
+  go (Call _ _) err@(Err _) = pure err
   go (Pipe c exprs) x = case go c x of
     Left err -> Left err
     Right v -> go exprs v

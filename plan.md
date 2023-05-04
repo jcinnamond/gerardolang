@@ -24,3 +24,7 @@ Expr := Call
 `currentTime |> toDate`		-- should be fine
 
 `currentTime |> strip "-"`	-- should error
+
+# Errors
+
+`parseTime "rubbish" |> formatTime "YY-mm-dd"` -- pass the "Err" along the pipeline
